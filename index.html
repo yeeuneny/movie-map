@@ -253,6 +253,203 @@
             font-size: 20px;
             cursor: pointer;
         }
+
+        /* 모바일 화면 대응 시작 */
+
+        #map-container {
+            height: 100vh;
+            height: 100dvh;
+        }
+
+        #detail-panel {
+            max-height: calc(100dvh - 48px);
+            overflow-y: auto;
+            overscroll-behavior: contain;
+        }
+
+        .movie-label {
+            max-width: calc(100vw - 24px);
+        }
+
+        @media (max-width: 600px) {
+            .page-title {
+                top: 18px;
+                left: 18px;
+            }
+
+            .page-title h1 {
+                font-size: 19px;
+            }
+
+            .page-title p {
+                font-size: 12px;
+            }
+
+            .movie-label {
+                min-height: 44px;
+                padding: 10px 7px;
+                font-size: 13px;
+
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            #detail-panel {
+                left: 12px;
+                right: 12px;
+                bottom: max(12px, env(safe-area-inset-bottom));
+
+                width: auto;
+                max-height: calc(100dvh - 24px);
+                padding: 20px 18px;
+                padding-bottom: max(
+                    20px,
+                    env(safe-area-inset-bottom)
+                );
+
+                overflow-y: auto;
+                border-radius: 18px;
+            }
+
+            #detail-panel h2 {
+                padding-right: 24px;
+                font-size: 18px;
+            }
+
+            #detail-panel div {
+                grid-template-columns: 64px minmax(0, 1fr);
+                gap: 8px;
+            }
+
+            #comment-input {
+                font-size: 16px;
+            }
+
+            #comment-submit {
+                min-height: 42px;
+                padding: 10px 16px;
+            }
+
+            #comment-list {
+                max-height: none;
+            }
+
+            #close-panel {
+                width: 40px;
+                height: 40px;
+                top: 6px;
+                right: 6px;
+            }
+        }
+
+        @media (max-height: 500px)
+            and (orientation: landscape) {
+
+            .page-title {
+                top: 10px;
+                left: 14px;
+            }
+
+            .page-title h1 {
+                font-size: 17px;
+            }
+
+            .page-title p {
+                display: none;
+            }
+
+            #detail-panel {
+                top: 8px;
+                bottom: 8px;
+                max-height: none;
+            }
+        }
+
+        /* 모바일 화면 대응 끝 */
+        
+        #map-content {
+            position: absolute;
+            inset: 0;
+            transform-origin: center center;
+            transition: transform 0.12s ease-out;
+        }
+
+        #zoom-controls {
+            position: fixed;
+            left: 20px;
+            bottom: 20px;
+            z-index: 300;
+
+            display: flex;
+            align-items: center;
+            gap: 8px;
+
+            padding: 9px 10px;
+            border: 1px solid #e5e5e5;
+            border-radius: 12px;
+
+            background: rgba(255, 255, 255, 0.94);
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(8px);
+        }
+
+        #zoom-controls button {
+            width: 32px;
+            height: 32px;
+
+            padding: 0;
+            border: 1px solid #dddddd;
+            border-radius: 8px;
+
+            background: #ffffff;
+            color: #333333;
+
+            font: inherit;
+            font-size: 18px;
+            line-height: 1;
+
+            cursor: pointer;
+        }
+
+        #zoom-controls button:hover {
+            background: #f2f2f2;
+        }
+
+        #zoom-range {
+            width: 120px;
+            cursor: pointer;
+        }
+
+        #zoom-value {
+            min-width: 42px;
+            color: #555555;
+            font-size: 12px;
+            text-align: center;
+        }
+
+        @media (max-width: 600px) {
+            #zoom-controls {
+                left: 12px;
+                bottom: max(12px, env(safe-area-inset-bottom));
+                gap: 5px;
+                padding: 7px;
+            }
+
+            #zoom-controls button {
+                width: 36px;
+                height: 36px;
+            }
+
+            #zoom-range {
+                width: 80px;
+            }
+
+            #zoom-value {
+                min-width: 38px;
+            }
+        }
+
     </style>
 </head>
 
@@ -263,10 +460,38 @@
     </header>
 
     <main id="map-container">
-        <p class="status-message">
-            영화 데이터를 불러오는 중입니다.
-        </p>
+        <div id="map-content">
+            <p class="status-message">
+                영화 데이터를 불러오는 중입니다.
+            </p>
+        </div>
     </main>
+
+    <div id="zoom-controls" aria-label="화면 확대 및 축소">
+        <button id="zoom-out" type="button" aria-label="축소">
+            −
+        </button>
+
+        <input
+            id="zoom-range"
+            type="range"
+            min="0.5"
+            max="4"
+            step="0.1"
+            value="1"
+            aria-label="확대 배율"
+        >
+
+        <span id="zoom-value">1.0×</span>
+
+        <button id="zoom-in" type="button" aria-label="확대">
+            +
+        </button>
+
+        <button id="zoom-reset" type="button" aria-label="확대 초기화">
+            ↺
+        </button>
+    </div>
 
     <aside id="detail-panel">
         <button id="close-panel" type="button" aria-label="닫기">
@@ -302,6 +527,7 @@
             </div>
         </dl>
 
+
         <section class="comments-section" aria-labelledby="comments-heading">
             <h3 id="comments-heading">익명 댓글</h3>
 
@@ -326,8 +552,22 @@
     <script>
         const CSV_URL = "./movies.csv";
 
-        const container = document.getElementById("map-container");
+        const container = document.getElementById("map-content");
         const detailPanel = document.getElementById("detail-panel");
+
+        const mapContent = document.getElementById("map-content");
+
+        const zoomOutButton = document.getElementById("zoom-out");
+        const zoomInButton = document.getElementById("zoom-in");
+        const zoomResetButton = document.getElementById("zoom-reset");
+        const zoomRange = document.getElementById("zoom-range");
+        const zoomValue = document.getElementById("zoom-value");
+
+        const MIN_ZOOM = 0.5;
+        const MAX_ZOOM = 4;
+        const ZOOM_STEP = 0.1;
+
+        let currentZoom = 1;
 
         const detailTitle = document.getElementById("detail-title");
         const detailType = document.getElementById("detail-type");
@@ -591,6 +831,56 @@
             commentInput.value = "";
             renderComments(currentMovieTitle);
             commentInput.focus();
+        });
+
+        function clampZoom(value) {
+            return Math.min(
+                MAX_ZOOM,
+                Math.max(MIN_ZOOM, value)
+            );
+        }
+
+        function setZoom(value) {
+            currentZoom = clampZoom(Number(value));
+
+            mapContent.style.transform =
+                `scale(${currentZoom})`;
+
+            zoomRange.value = currentZoom.toFixed(1);
+            zoomValue.textContent =
+                `${currentZoom.toFixed(1)}×`;
+        }
+
+        zoomOutButton.addEventListener("click", () => {
+            setZoom(currentZoom - ZOOM_STEP);
+        });
+
+        zoomInButton.addEventListener("click", () => {
+            setZoom(currentZoom + ZOOM_STEP);
+        });
+
+        zoomResetButton.addEventListener("click", () => {
+            setZoom(1);
+        });
+
+        zoomRange.addEventListener("input", event => {
+            setZoom(event.target.value);
+        });
+
+        document.addEventListener("wheel", event => {
+            if (!event.ctrlKey) {
+                return;
+            }
+
+            event.preventDefault();
+
+            const direction = event.deltaY < 0
+                ? ZOOM_STEP
+                : -ZOOM_STEP;
+
+            setZoom(currentZoom + direction);
+        }, {
+            passive: false
         });
 
         function closeDetailPanel() {
