@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Movie Archive Map</title>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Pretendard, Pretendard-Semibold, Pretendard-Bold;
+            background: #f7f7f5;
+            color: #1a1a1a;
+            overflow: hidden;
+        }
+
+        #map-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            background:
+                linear-gradient(
+                    rgba(0, 0, 0, 0.025) 1px,
+                    transparent 1px
+                ),
+                linear-gradient(
+                    90deg,
+                    rgba(0, 0, 0, 0.025) 1px,
+                    transparent 1px
+                );
+
+            background-size: 40px 40px;
+        }
+
+        .page-title {
+            position: fixed;
+            top: 24px;
+            left: 28px;
+            z-index: 100;
+            pointer-events: none;
+        }
+
+        .page-title h1 {
+            margin: 0;
+            font-size: 22px;
+            line-height: 1.2;
+        }
+
+        .page-title p {
+            margin: 5px 0 0;
+            font-size: 13px;
+            color: #777;
+        }
+
+        .movie-label {
+            position: absolute;
+            transform: translate(-50%, -50%);
+            padding: 4px 8px;
+            
+            /* 테두리 및 배경 제거 */
+            border: none !important; 
+            background: transparent !important;
+            
+            font-family: inherit;
+            font-size: 14px;
+            font-weight: 600;
+            white-space: nowrap;
+            
+            cursor: pointer;
+            user-select: none;
+            
+            transition: transform 0.18s ease;
+        }
+
+        .movie-label:hover {
+            z-index: 20;
+            transform: translate(-50%, -50%) scale(1.15);
+            background: transparent !important;
+            box-shadow: none !important;
+        }
+
+        .status-message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+
+            color: #777;
+            font-size: 15px;
+        }
+
+        .error-message {
+            color: #b42318;
+        }
+
+        #detail-panel {
+            position: fixed;
+            right: 24px;
+            bottom: 24px;
+            z-index: 200;
+
+            width: min(340px, calc(100vw - 48px));
+            padding: 22px;
+
+            border: 1px solid #e5e5e5;
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.96);
+            box-shadow: 0 16px 50px rgba(0, 0, 0, 0.14);
+
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(14px);
+
+            transition:
+                opacity 0.2s ease,
+                visibility 0.2s ease,
+                transform 0.2s ease;
+        }
+
+        #detail-panel.open {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+        }
+
+        #detail-panel h2 {
+            margin: 0 0 14px;
+            font-size: 20px;
+        }
+
+        #detail-panel dl {
+            margin: 0;
+        }
+
+        #detail-panel div {
+            display: grid;
+            grid-template-columns: 72px 1fr;
+            gap: 10px;
+            margin-top: 9px;
+        }
+
+        #detail-panel dt {
+            color: #888;
+            font-size: 13px;
+        }
+
+        #detail-panel dd {
+            margin: 0;
+            font-size: 14px;
+        }
+
+        #close-panel {
+            position: absolute;
+            top: 12px;
+            right: 14px;
+
+            border: 0;
+            background: transparent;
+            color: #777;
+            font-size: 20px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+
+<body>
+    <header class="page-title">
+        <h1>What's in My Archive?</h1>
+        <p>20 Films I've Collected</p>
+    </header>
+
+    <main id="map-container">
+        <p class="status-message">
+            영화 데이터를 불러오는 중입니다.
+        </p>
+    </main>
+
+    <aside id="detail-panel">
+        <button id="close-panel" type="button" aria-label="닫기">
+            ×
+        </button>
+
+        <h2 id="detail-title"></h2>
+
+        <dl>
+            <div>
+                <dt>유형</dt>
+                <dd id="detail-type"></dd>
+            </div>
+
+            <div>
+                <dt>장르</dt>
+                <dd id="detail-genres"></dd>
+            </div>
+
+            <div>
+                <dt>감독</dt>
+                <dd id="detail-director"></dd>
+            </div>
+
+            <div>
+                <dt>개봉연도</dt>
+                <dd id="detail-year"></dd>
+            </div>
+
+            <div>
+                <dt>평점</dt>
+                <dd id="detail-rating"></dd>
+            </div>
+        </dl>
+    </aside>
+
+    <script>
+        const CSV_URL = "./movies_pca.csv";
+
+        const container = document.getElementById("map-container");
+        const detailPanel = document.getElementById("detail-panel");
+
+        const detailTitle = document.getElementById("detail-title");
+        const detailType = document.getElementById("detail-type");
+        const detailGenres = document.getElementById("detail-genres");
+        const detailDirector = document.getElementById("detail-director");
+        const detailYear = document.getElementById("detail-year");
+        const detailRating = document.getElementById("detail-rating");
+
+        const closePanelButton =
+            document.getElementById("close-panel");
+
+        async function init() {
+            try {
+                const response = await fetch(CSV_URL);
+
+                if (!response.ok) {
+                    throw new Error(
+                        `CSV 불러오기 실패: ${response.status}`
+                    );
+                }
+
+                const csvText = await response.text();
+
+                Papa.parse(csvText, {
+                    header: true,
+                    dynamicTyping: true,
+                    skipEmptyLines: true,
+
+                    complete: (results) => {
+                        console.log("CSV 데이터:", results.data);
+                        console.log("CSV 파싱 오류:", results.errors);
+
+                        const movies = results.data
+                            .map(normalizeMovie)
+                            .filter(movie => movie.title);
+
+                        if (movies.length === 0) {
+                            showError(
+                                "CSV에서 영화 데이터를 찾지 못했습니다."
+                            );
+                            return;
+                        }
+
+                        const validMovies = movies.filter(movie =>
+                            Number.isFinite(movie.pca1) &&
+                            Number.isFinite(movie.pca2)
+                        );
+
+                        if (validMovies.length === 0) {
+                            showError(
+                                "PCA 좌표를 찾지 못했습니다. CSV의 PCA1, PCA2 열을 확인하세요."
+                            );
+                            return;
+                        }
+
+                        const moviesWithCoordinates =
+                            assignPcaCoordinates(validMovies);
+
+                        renderMovies(moviesWithCoordinates);
+                    },
+
+                    error: (error) => {
+                        showError(
+                            `CSV 분석 실패: ${error.message}`
+                        );
+                    }
+                });
+            } catch (error) {
+                console.error(error);
+                showError(error.message);
+            }
+        }
+
+        function normalizeMovie(row) {
+            return {
+                title: String(row.Title ?? "").trim(),
+                type: String(row.Type ?? "").trim(),
+
+                genres: String(row.Genres ?? "")
+                    .split(",")
+                    .map(value => value.trim())
+                    .filter(Boolean),
+
+                directors: String(row.Director ?? "")
+                    .split(",")
+                    .map(value => value.trim())
+                    .filter(Boolean),
+
+                year: Number(row.Year),
+                rating: Number(row.Rating),
+                plot: String(row.Plot ?? "").trim(),
+
+                pca1: Number(row.PCA1),
+                pca2: Number(row.PCA2)
+            };
+        }
+
+        function assignPcaCoordinates(movies) {
+            const pca1Values = movies.map(movie => movie.pca1);
+            const pca2Values = movies.map(movie => movie.pca2);
+
+            const minX = Math.min(...pca1Values);
+            const maxX = Math.max(...pca1Values);
+
+            const minY = Math.min(...pca2Values);
+            const maxY = Math.max(...pca2Values);
+
+            const xRange = maxX - minX || 1;
+            const yRange = maxY - minY || 1;
+
+            return movies.map(movie => {
+                /*
+                * PCA 값을 화면의 8%~92% 범위로 변환합니다.
+                * 화면 가장자리에서 제목이 잘리는 것을 방지합니다.
+                */
+                const x =
+                    8 + ((movie.pca1 - minX) / xRange) * 84;
+
+                /*
+                * 일반 좌표계와 화면 y축 방향이 반대이므로 뒤집습니다.
+                */
+                const y =
+                    92 - ((movie.pca2 - minY) / yRange) * 84;
+
+                return {
+                    ...movie,
+                    x,
+                    y
+                };
+            });
+        }
+
+        function renderMovies(movies) {
+            container.innerHTML = "";
+
+            movies.forEach(movie => {
+                const label =
+                    document.createElement("button");
+
+                label.type = "button";
+                label.className = "movie-label";
+                label.textContent = movie.title;
+
+                label.style.left = `${movie.x}%`;
+                label.style.top = `${movie.y}%`;
+
+                /*
+                 * 현재는 임시 랜덤 좌표를 색조 계산에도 사용합니다.
+                 * 나중에 PCA 좌표로 교체하면 가까운 영화가
+                 * 비슷한 색조를 갖게 됩니다.
+                 */
+                const hue =
+                    (movie.x * 2.5 + movie.y * 1.4) % 360;
+
+                /*
+                 * 현재 데이터는 5점 만점입니다.
+                 * 평점 0~5를 채도 25%~100%로 변환합니다.
+                 */
+                const safeRating = Number.isFinite(movie.rating)
+                    ? Math.min(5, Math.max(0, movie.rating))
+                    : 0;
+
+                const saturation =
+                    25 + (safeRating / 5) * 75;
+
+                label.style.color =
+                    `hsl(${hue}, ${saturation}%, 38%)`;
+
+                label.addEventListener("click", () => {
+                    openDetailPanel(movie);
+                });
+
+                container.appendChild(label);
+            });
+        }
+
+        function openDetailPanel(movie) {
+            detailTitle.textContent = movie.title;
+
+            detailType.textContent =
+                movie.type || "정보 없음";
+
+            detailGenres.textContent =
+                movie.genres.join(", ") || "정보 없음";
+
+            detailDirector.textContent =
+                movie.directors.join(", ") || "정보 없음";
+
+            detailYear.textContent =
+                Number.isFinite(movie.year)
+                    ? movie.year
+                    : "정보 없음";
+
+            detailRating.textContent =
+                Number.isFinite(movie.rating)
+                    ? `${movie.rating} / 5`
+                    : "정보 없음";
+
+            detailPanel.classList.add("open");
+        }
+
+        function closeDetailPanel() {
+            detailPanel.classList.remove("open");
+        }
+
+        function showError(message) {
+            container.innerHTML = `
+                <p class="status-message error-message">
+                    ${message}
+                </p>
+            `;
+        }
+
+        closePanelButton.addEventListener(
+            "click",
+            closeDetailPanel
+        );
+
+        document.addEventListener("keydown", event => {
+            if (event.key === "Escape") {
+                closeDetailPanel();
+            }
+        });
+
+        init();
+    </script>
+</body>
+</html>
