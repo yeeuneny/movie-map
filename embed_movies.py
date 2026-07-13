@@ -6,8 +6,10 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.preprocessing import normalize
 
 
-INPUT_PATH = Path("movies.csv")
-OUTPUT_PATH = Path("movies_pca.csv")
+BASE_DIR = Path(__file__).parent
+
+INPUT_PATH = BASE_DIR / "movies.csv"
+OUTPUT_PATH = BASE_DIR / "movies_pca.csv"
 
 
 def clean_text_column(series: pd.Series) -> pd.Series:

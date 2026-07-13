@@ -527,6 +527,18 @@
             </div>
         </dl>
 
+        <div class="like-section">
+            <button
+                id="like-button"
+                type="button"
+                aria-pressed="false"
+            >
+                ♡ 좋아요
+            </button>
+
+            <span id="like-count">0</span>
+        </div>
+
 
         <section class="comments-section" aria-labelledby="comments-heading">
             <h3 id="comments-heading">익명 댓글</h3>
@@ -550,7 +562,7 @@
     </aside>
 
     <script>
-        const CSV_URL = "./movies.csv";
+        const CSV_URL = "./movies_pca.csv";
 
         const container = document.getElementById("map-content");
         const detailPanel = document.getElementById("detail-panel");
@@ -575,6 +587,12 @@
         const detailDirector = document.getElementById("detail-director");
         const detailYear = document.getElementById("detail-year");
         const detailRating = document.getElementById("detail-rating");
+
+        const likeButton =
+            document.getElementById("like-button");
+
+        const likeCount =
+            document.getElementById("like-count");
 
         const closePanelButton =
             document.getElementById("close-panel");
@@ -618,7 +636,7 @@
                         }
 
                         const moviesWithCoordinates =
-                            assignRandomCoordinates(movies);
+                            assignPcaCoordinates(movies);
 
                         renderMovies(moviesWithCoordinates);
                     },
@@ -651,32 +669,49 @@
                     .filter(Boolean),
 
                 year: Number(row.Year),
-                rating: Number(row.Rating)
+                rating: Number(row.Rating),
+
+                pca1: Number(row.PCA1),
+                pca2: Number(row.PCA2)
             };
         }
 
-        function assignRandomCoordinates(movies) {
-            const count = movies.length;
-            // 격자 크기 결정 (개수에 따라 자동으로 변함)
-            const cols = Math.ceil(Math.sqrt(count));
-            const rows = Math.ceil(count / cols);
+        function assignPcaCoordinates(movies) {
+            const validMovies = movies.filter(movie =>
+                Number.isFinite(movie.pca1) &&
+                Number.isFinite(movie.pca2)
+            );
 
-            return movies.map((movie, index) => {
-                const col = index % cols;
-                const row = Math.floor(index / cols);
+            if (validMovies.length === 0) {
+                throw new Error("유효한 PCA 좌표가 없습니다.");
+            }
 
-                // 전체 화면에서 격자 칸의 너비/높이 계산 (여백 10% 확보)
-                const cellWidth = 80 / cols;
-                const cellHeight = 80 / rows;
+            const pca1Values = validMovies.map(movie => movie.pca1);
+            const pca2Values = validMovies.map(movie => movie.pca2);
 
-                // 각 격자 내부에서의 랜덤 오프셋
-                const randomX = Math.random() * (cellWidth * 0.6);
-                const randomY = Math.random() * (cellHeight * 0.6);
+            const minX = Math.min(...pca1Values);
+            const maxX = Math.max(...pca1Values);
+            const minY = Math.min(...pca2Values);
+            const maxY = Math.max(...pca2Values);
+
+            const xRange = maxX - minX || 1;
+            const yRange = maxY - minY || 1;
+
+            return movies.map(movie => {
+                const normalizedX =
+                    (movie.pca1 - minX) / xRange;
+
+                const normalizedY =
+                    (movie.pca2 - minY) / yRange;
 
                 return {
                     ...movie,
-                    x: 10 + (col * cellWidth) + (cellWidth * 0.2) + randomX,
-                    y: 10 + (row * cellHeight) + (cellHeight * 0.2) + randomY
+
+                    // 화면 가장자리 여백 10% 확보
+                    x: 10 + normalizedX * 80,
+
+                    // PCA 좌표는 위쪽이 양수일 수 있으므로 화면 Y축 반전
+                    y: 90 - normalizedY * 80
                 };
             });
         }
@@ -723,6 +758,238 @@
 
                 container.appendChild(label);
             });
+
+            requestAnimationFrame(() => {
+                resolveLabelCollisions();
+            });
+        }
+
+        function resolveLabelCollisions() {
+            const labels = [
+                ...container.querySelectorAll(".movie-label")
+            ];
+
+            const containerRect =
+                container.getBoundingClientRect();
+
+            const padding = 6;
+            const maxIterations = 100;
+
+            for (
+                let iteration = 0;
+                iteration < maxIterations;
+                iteration++
+            ) {
+                let collisionFound = false;
+
+                for (let i = 0; i < labels.length; i++) {
+                    for (
+                        let j = i + 1;
+                        j < labels.length;
+                        j++
+                    ) {
+                        const first = labels[i];
+                        const second = labels[j];
+
+                        const firstRect =
+                            first.getBoundingClientRect();
+
+                        const secondRect =
+                            second.getBoundingClientRect();
+
+                        const overlapX =
+                            Math.min(
+                                firstRect.right,
+                                secondRect.right
+                            )
+                            -
+                            Math.max(
+                                firstRect.left,
+                                secondRect.left
+                            );
+
+                        const overlapY =
+                            Math.min(
+                                firstRect.bottom,
+                                secondRect.bottom
+                            )
+                            -
+                            Math.max(
+                                firstRect.top,
+                                secondRect.top
+                            );
+
+                        if (
+                            overlapX > -padding &&
+                            overlapY > -padding
+                        ) {
+                            collisionFound = true;
+
+                            const firstCenterX =
+                                firstRect.left +
+                                firstRect.width / 2;
+
+                            const secondCenterX =
+                                secondRect.left +
+                                secondRect.width / 2;
+
+                            const firstCenterY =
+                                firstRect.top +
+                                firstRect.height / 2;
+
+                            const secondCenterY =
+                                secondRect.top +
+                                secondRect.height / 2;
+
+                            let directionX =
+                                secondCenterX - firstCenterX;
+
+                            let directionY =
+                                secondCenterY - firstCenterY;
+
+                            if (
+                                directionX === 0 &&
+                                directionY === 0
+                            ) {
+                                directionX = i % 2 === 0 ? 1 : -1;
+                                directionY = j % 2 === 0 ? 1 : -1;
+                            }
+
+                            const distance =
+                                Math.hypot(
+                                    directionX,
+                                    directionY
+                                ) || 1;
+
+                            directionX /= distance;
+                            directionY /= distance;
+
+                            const movePixels = 2;
+
+                            moveLabel(
+                                first,
+                                -directionX * movePixels,
+                                -directionY * movePixels,
+                                containerRect
+                            );
+
+                            moveLabel(
+                                second,
+                                directionX * movePixels,
+                                directionY * movePixels,
+                                containerRect
+                            );
+                        }
+                    }
+                }
+
+                if (!collisionFound) {
+                    break;
+                }
+            }
+        }
+
+        function moveLabel(
+            label,
+            moveX,
+            moveY,
+            containerRect
+        ) {
+            const currentLeft =
+                parseFloat(label.style.left);
+
+            const currentTop =
+                parseFloat(label.style.top);
+
+            const movePercentX =
+                (moveX / containerRect.width) * 100;
+
+            const movePercentY =
+                (moveY / containerRect.height) * 100;
+
+            const nextLeft = Math.min(
+                96,
+                Math.max(
+                    4,
+                    currentLeft + movePercentX
+                )
+            );
+
+            const nextTop = Math.min(
+                96,
+                Math.max(
+                    4,
+                    currentTop + movePercentY
+                )
+            );
+
+            label.style.left = `${nextLeft}%`;
+            label.style.top = `${nextTop}%`;
+        }
+
+        function getLikeStorageKey(movieTitle) {
+            return `movie-like:${movieTitle}`;
+        }
+
+        function getLikeCountStorageKey(movieTitle) {
+            return `movie-like-count:${movieTitle}`;
+        }
+
+        function hasLikedMovie(movieTitle) {
+            return (
+                localStorage.getItem(
+                    getLikeStorageKey(movieTitle)
+                ) === "true"
+            );
+        }
+
+        function loadLikeCount(movieTitle) {
+            const savedCount = Number(
+                localStorage.getItem(
+                    getLikeCountStorageKey(movieTitle)
+                )
+            );
+
+            return Number.isFinite(savedCount)
+                ? savedCount
+                : 0;
+        }
+
+        function saveLikeState(
+            movieTitle,
+            isLiked,
+            count
+        ) {
+            localStorage.setItem(
+                getLikeStorageKey(movieTitle),
+                String(isLiked)
+            );
+
+            localStorage.setItem(
+                getLikeCountStorageKey(movieTitle),
+                String(count)
+            );
+        }
+
+        function renderLike(movieTitle) {
+            const isLiked = hasLikedMovie(movieTitle);
+            const count = loadLikeCount(movieTitle);
+
+            likeButton.classList.toggle(
+                "liked",
+                isLiked
+            );
+
+            likeButton.setAttribute(
+                "aria-pressed",
+                String(isLiked)
+            );
+
+            likeButton.textContent = isLiked
+                ? "♥ 좋아요 취소"
+                : "♡ 좋아요";
+
+            likeCount.textContent = `${count}명`;
         }
 
         function openDetailPanel(movie) {
@@ -748,8 +1015,10 @@
                     ? `${movie.rating} / 5`
                     : "정보 없음";
 
+            renderLike(currentMovieTitle);
             renderComments(currentMovieTitle);
             commentInput.value = "";
+            
             detailPanel.classList.add("open");
         }
 
@@ -904,6 +1173,32 @@
             if (event.key === "Escape") {
                 closeDetailPanel();
             }
+        });
+
+        likeButton.addEventListener("click", () => {
+            if (!currentMovieTitle) {
+                return;
+            }
+
+            const wasLiked =
+                hasLikedMovie(currentMovieTitle);
+
+            let count =
+                loadLikeCount(currentMovieTitle);
+
+            if (wasLiked) {
+                count = Math.max(0, count - 1);
+            } else {
+                count += 1;
+            }
+
+            saveLikeState(
+                currentMovieTitle,
+                !wasLiked,
+                count
+            );
+
+            renderLike(currentMovieTitle);
         });
 
         init();
