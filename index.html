@@ -64,19 +64,19 @@
             position: absolute;
             transform: translate(-50%, -50%);
             padding: 4px 8px;
-            
+
             /* 테두리 및 배경 제거 */
-            border: none !important; 
+            border: none !important;
             background: transparent !important;
-            
+
             font-family: inherit;
             font-size: 14px;
             font-weight: 600;
             white-space: nowrap;
-            
+
             cursor: pointer;
             user-select: none;
-            
+
             transition: transform 0.18s ease;
         }
 
@@ -157,6 +157,91 @@
             font-size: 14px;
         }
 
+
+        .comments-section {
+            margin-top: 20px;
+            padding-top: 16px;
+            border-top: 1px solid #ececec;
+        }
+
+        .comments-section h3 {
+            margin: 0 0 10px;
+            font-size: 15px;
+        }
+
+        #comment-form {
+            display: grid;
+            gap: 8px;
+        }
+
+        #comment-input {
+            width: 100%;
+            min-height: 76px;
+            padding: 10px 12px;
+            border: 1px solid #d8d8d8;
+            border-radius: 10px;
+            resize: vertical;
+            font: inherit;
+            font-size: 14px;
+            line-height: 1.5;
+            outline: none;
+        }
+
+        #comment-input:focus {
+            border-color: #999;
+        }
+
+        #comment-submit {
+            justify-self: end;
+            padding: 8px 13px;
+            border: 0;
+            border-radius: 9px;
+            background: #1a1a1a;
+            color: #fff;
+            font: inherit;
+            font-size: 13px;
+            cursor: pointer;
+        }
+
+        #comment-submit:hover {
+            opacity: 0.86;
+        }
+
+        #comment-list {
+            display: grid;
+            gap: 8px;
+            max-height: 180px;
+            margin: 14px 0 0;
+            padding: 0;
+            overflow-y: auto;
+            list-style: none;
+        }
+
+        .comment-item {
+            padding: 10px 12px;
+            border-radius: 10px;
+            background: #f5f5f3;
+        }
+
+        .comment-text {
+            margin: 0;
+            white-space: pre-wrap;
+            word-break: break-word;
+            font-size: 13px;
+            line-height: 1.45;
+        }
+
+        .comment-meta {
+            margin-top: 6px;
+            color: #999;
+            font-size: 11px;
+        }
+
+        .comment-empty {
+            color: #999;
+            font-size: 13px;
+        }
+
         #close-panel {
             position: absolute;
             top: 12px;
@@ -174,7 +259,7 @@
 <body>
     <header class="page-title">
         <h1>What's in My Archive?</h1>
-        <p>20 Films I've Collected</p>
+        <p>20 Films I've collected</p>
     </header>
 
     <main id="map-container">
@@ -216,10 +301,30 @@
                 <dd id="detail-rating"></dd>
             </div>
         </dl>
+
+        <section class="comments-section" aria-labelledby="comments-heading">
+            <h3 id="comments-heading">익명 댓글</h3>
+
+            <form id="comment-form">
+                <textarea
+                    id="comment-input"
+                    maxlength="300"
+                    placeholder="이 영화에 대한 댓글을 남겨주세요."
+                    aria-label="익명 댓글 입력"
+                    required
+                ></textarea>
+
+                <button id="comment-submit" type="submit">
+                    댓글 등록
+                </button>
+            </form>
+
+            <ul id="comment-list" aria-live="polite"></ul>
+        </section>
     </aside>
 
     <script>
-        const CSV_URL = "./movies_pca.csv";
+        const CSV_URL = "./movies.csv";
 
         const container = document.getElementById("map-container");
         const detailPanel = document.getElementById("detail-panel");
@@ -233,6 +338,12 @@
 
         const closePanelButton =
             document.getElementById("close-panel");
+
+        const commentForm = document.getElementById("comment-form");
+        const commentInput = document.getElementById("comment-input");
+        const commentList = document.getElementById("comment-list");
+
+        let currentMovieTitle = "";
 
         async function init() {
             try {
@@ -266,20 +377,8 @@
                             return;
                         }
 
-                        const validMovies = movies.filter(movie =>
-                            Number.isFinite(movie.pca1) &&
-                            Number.isFinite(movie.pca2)
-                        );
-
-                        if (validMovies.length === 0) {
-                            showError(
-                                "PCA 좌표를 찾지 못했습니다. CSV의 PCA1, PCA2 열을 확인하세요."
-                            );
-                            return;
-                        }
-
                         const moviesWithCoordinates =
-                            assignPcaCoordinates(validMovies);
+                            assignRandomCoordinates(movies);
 
                         renderMovies(moviesWithCoordinates);
                     },
@@ -312,45 +411,32 @@
                     .filter(Boolean),
 
                 year: Number(row.Year),
-                rating: Number(row.Rating),
-                plot: String(row.Plot ?? "").trim(),
-
-                pca1: Number(row.PCA1),
-                pca2: Number(row.PCA2)
+                rating: Number(row.Rating)
             };
         }
 
-        function assignPcaCoordinates(movies) {
-            const pca1Values = movies.map(movie => movie.pca1);
-            const pca2Values = movies.map(movie => movie.pca2);
+        function assignRandomCoordinates(movies) {
+            const count = movies.length;
+            // 격자 크기 결정 (개수에 따라 자동으로 변함)
+            const cols = Math.ceil(Math.sqrt(count));
+            const rows = Math.ceil(count / cols);
 
-            const minX = Math.min(...pca1Values);
-            const maxX = Math.max(...pca1Values);
+            return movies.map((movie, index) => {
+                const col = index % cols;
+                const row = Math.floor(index / cols);
 
-            const minY = Math.min(...pca2Values);
-            const maxY = Math.max(...pca2Values);
+                // 전체 화면에서 격자 칸의 너비/높이 계산 (여백 10% 확보)
+                const cellWidth = 80 / cols;
+                const cellHeight = 80 / rows;
 
-            const xRange = maxX - minX || 1;
-            const yRange = maxY - minY || 1;
-
-            return movies.map(movie => {
-                /*
-                * PCA 값을 화면의 8%~92% 범위로 변환합니다.
-                * 화면 가장자리에서 제목이 잘리는 것을 방지합니다.
-                */
-                const x =
-                    8 + ((movie.pca1 - minX) / xRange) * 84;
-
-                /*
-                * 일반 좌표계와 화면 y축 방향이 반대이므로 뒤집습니다.
-                */
-                const y =
-                    92 - ((movie.pca2 - minY) / yRange) * 84;
+                // 각 격자 내부에서의 랜덤 오프셋
+                const randomX = Math.random() * (cellWidth * 0.6);
+                const randomY = Math.random() * (cellHeight * 0.6);
 
                 return {
                     ...movie,
-                    x,
-                    y
+                    x: 10 + (col * cellWidth) + (cellWidth * 0.2) + randomX,
+                    y: 10 + (row * cellHeight) + (cellHeight * 0.2) + randomY
                 };
             });
         }
@@ -396,12 +482,11 @@
                 });
 
                 container.appendChild(label);
-                // 모든 제목을 배치한 뒤 겹침 제거
-                requestAnimationFrame(resolveLabelOverlap);
             });
         }
 
         function openDetailPanel(movie) {
+            currentMovieTitle = movie.title;
             detailTitle.textContent = movie.title;
 
             detailType.textContent =
@@ -423,8 +508,90 @@
                     ? `${movie.rating} / 5`
                     : "정보 없음";
 
+            renderComments(currentMovieTitle);
+            commentInput.value = "";
             detailPanel.classList.add("open");
         }
+
+
+        function getCommentStorageKey(movieTitle) {
+            return `movie-comments:${movieTitle}`;
+        }
+
+        function loadComments(movieTitle) {
+            try {
+                const saved = localStorage.getItem(
+                    getCommentStorageKey(movieTitle)
+                );
+
+                return saved ? JSON.parse(saved) : [];
+            } catch (error) {
+                console.error("댓글 불러오기 실패:", error);
+                return [];
+            }
+        }
+
+        function saveComments(movieTitle, comments) {
+            localStorage.setItem(
+                getCommentStorageKey(movieTitle),
+                JSON.stringify(comments)
+            );
+        }
+
+        function renderComments(movieTitle) {
+            const comments = loadComments(movieTitle);
+            commentList.innerHTML = "";
+
+            if (comments.length === 0) {
+                const emptyMessage = document.createElement("li");
+                emptyMessage.className = "comment-empty";
+                emptyMessage.textContent = "아직 등록된 댓글이 없습니다.";
+                commentList.appendChild(emptyMessage);
+                return;
+            }
+
+            comments
+                .slice()
+                .reverse()
+                .forEach(comment => {
+                    const item = document.createElement("li");
+                    item.className = "comment-item";
+
+                    const body = document.createElement("p");
+                    body.className = "comment-text";
+                    body.textContent = comment.text;
+
+                    const meta = document.createElement("div");
+                    meta.className = "comment-meta";
+                    meta.textContent =
+                        `익명 · ${new Date(comment.createdAt).toLocaleString("ko-KR")}`;
+
+                    item.append(body, meta);
+                    commentList.appendChild(item);
+                });
+        }
+
+        commentForm.addEventListener("submit", event => {
+            event.preventDefault();
+
+            const commentText = commentInput.value.trim();
+
+            if (!currentMovieTitle || !commentText) {
+                return;
+            }
+
+            const comments = loadComments(currentMovieTitle);
+
+            comments.push({
+                text: commentText,
+                createdAt: new Date().toISOString()
+            });
+
+            saveComments(currentMovieTitle, comments);
+            commentInput.value = "";
+            renderComments(currentMovieTitle);
+            commentInput.focus();
+        });
 
         function closeDetailPanel() {
             detailPanel.classList.remove("open");
@@ -436,51 +603,6 @@
                     ${message}
                 </p>
             `;
-        }
-        
-        function resolveLabelOverlap() {
-            const labels = [...document.querySelectorAll(".movie-label")];
-            const padding = 10; // 제목 사이 최소 간격(px)
-
-            for (let k = 0; k < 20; k++) { // 여러 번 반복하며 충돌 해결
-                let moved = false;
-
-                for (let i = 0; i < labels.length; i++) {
-                    const a = labels[i];
-                    let rectA = a.getBoundingClientRect();
-
-                    for (let j = i + 1; j < labels.length; j++) {
-                        const b = labels[j];
-                        let rectB = b.getBoundingClientRect();
-
-                        const overlap =
-                            rectA.left < rectB.right + padding &&
-                            rectA.right + padding > rectB.left &&
-                            rectA.top < rectB.bottom + padding &&
-                            rectA.bottom + padding > rectB.top;
-
-                        if (!overlap) continue;
-
-                        moved = true;
-
-                        const ax = parseFloat(a.style.left);
-                        const ay = parseFloat(a.style.top);
-                        const bx = parseFloat(b.style.left);
-                        const by = parseFloat(b.style.top);
-
-                        // 두 제목을 반대 방향으로 조금씩 이동
-                        a.style.left = `${Math.max(3, ax - 0.5)}%`;
-                        a.style.top  = `${Math.max(3, ay - 0.3)}%`;
-
-                        b.style.left = `${Math.min(97, bx + 0.5)}%`;
-                        b.style.top  = `${Math.min(97, by + 0.3)}%`;
-
-                        rectA = a.getBoundingClientRect();
-                    }
-                }
-
-                if (!moved) break;
-            }
         }
 
         closePanelButton.addEventListener(
