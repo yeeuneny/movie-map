@@ -396,6 +396,8 @@
                 });
 
                 container.appendChild(label);
+                // 모든 제목을 배치한 뒤 겹침 제거
+                requestAnimationFrame(resolveLabelOverlap);
             });
         }
 
@@ -434,6 +436,51 @@
                     ${message}
                 </p>
             `;
+        }
+        
+        function resolveLabelOverlap() {
+            const labels = [...document.querySelectorAll(".movie-label")];
+            const padding = 10; // 제목 사이 최소 간격(px)
+
+            for (let k = 0; k < 20; k++) { // 여러 번 반복하며 충돌 해결
+                let moved = false;
+
+                for (let i = 0; i < labels.length; i++) {
+                    const a = labels[i];
+                    let rectA = a.getBoundingClientRect();
+
+                    for (let j = i + 1; j < labels.length; j++) {
+                        const b = labels[j];
+                        let rectB = b.getBoundingClientRect();
+
+                        const overlap =
+                            rectA.left < rectB.right + padding &&
+                            rectA.right + padding > rectB.left &&
+                            rectA.top < rectB.bottom + padding &&
+                            rectA.bottom + padding > rectB.top;
+
+                        if (!overlap) continue;
+
+                        moved = true;
+
+                        const ax = parseFloat(a.style.left);
+                        const ay = parseFloat(a.style.top);
+                        const bx = parseFloat(b.style.left);
+                        const by = parseFloat(b.style.top);
+
+                        // 두 제목을 반대 방향으로 조금씩 이동
+                        a.style.left = `${Math.max(3, ax - 0.5)}%`;
+                        a.style.top  = `${Math.max(3, ay - 0.3)}%`;
+
+                        b.style.left = `${Math.min(97, bx + 0.5)}%`;
+                        b.style.top  = `${Math.min(97, by + 0.3)}%`;
+
+                        rectA = a.getBoundingClientRect();
+                    }
+                }
+
+                if (!moved) break;
+            }
         }
 
         closePanelButton.addEventListener(
