@@ -450,13 +450,21 @@
             }
         }
 
+        #detail-poster {
+            width: 100%;
+            margin-bottom: 18px;
+            border-radius: 12px;
+            object-fit: cover;
+            display: none;
+        }
+
     </style>
 </head>
 
 <body>
     <header class="page-title">
         <h1>What's in My Archive?</h1>
-        <p>20 Films I've collected</p>
+        <p>30 Films I've collected</p>
     </header>
 
     <main id="map-container">
@@ -499,6 +507,11 @@
         </button>
 
         <h2 id="detail-title"></h2>
+        <img
+            id="detail-poster"
+            src=""
+            alt=""
+        >
 
         <dl>
             <div>
@@ -582,6 +595,7 @@
         let currentZoom = 1;
 
         const detailTitle = document.getElementById("detail-title");
+        const detailPoster = document.getElementById("detail-poster");
         const detailType = document.getElementById("detail-type");
         const detailGenres = document.getElementById("detail-genres");
         const detailDirector = document.getElementById("detail-director");
@@ -653,6 +667,16 @@
             }
         }
 
+        function createImageName(title) {
+            return title
+                .toLowerCase()
+                .trim()
+                .replace(/&/g, "and")
+                .replace(/['’]/g, "")
+                .replace(/[^a-z0-9]+/g, "-")
+                .replace(/^-+|-+$/g, "");
+        }
+
         function normalizeMovie(row) {
             return {
                 title: String(row.Title ?? "").trim(),
@@ -672,7 +696,9 @@
                 rating: Number(row.Rating),
 
                 pca1: Number(row.PCA1),
-                pca2: Number(row.PCA2)
+                pca2: Number(row.PCA2),
+
+                poster: `images/${createImageName(row.Title)}.jpg`
             };
         }
 
@@ -995,6 +1021,17 @@
         function openDetailPanel(movie) {
             currentMovieTitle = movie.title;
             detailTitle.textContent = movie.title;
+
+            detailPoster.src = movie.poster;
+            detailPoster.alt = movie.title;
+
+            detailPoster.onload = () => {
+                detailPoster.style.display = "block";
+            };
+
+            detailPoster.onerror = () => {
+                detailPoster.style.display = "none";
+            };
 
             detailType.textContent =
                 movie.type || "정보 없음";
